@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CD.RestrictMenu
  * Description: Ermöglicht es einem festgelegten Superuser die Backend-Navigation anzupassen, sodass Sie die beste Benutzererfahrung in der Bedienung erhalten und nicht durch unnütze Inhalte gestört werden.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Requires PHP: 7.4
  *
  * Installation: Diese Datei nach wp-content/mu-plugins/ kopieren.
@@ -14,11 +14,26 @@ defined( 'ABSPATH' ) || exit;
  * ------------------------------------------------------------------
  * SUPERUSER: Benutzername (Login) des Benutzers, der die Sichtbarkeit
  * für alle anderen festlegen darf. Für ihn selbst gelten keine
- * Einschränkungen. Kann alternativ in der wp-config.php gesetzt werden.
+ * Einschränkungen. Empfohlen: in der wp-config.php setzen, damit der
+ * Login nicht im Plugin-Quelltext steht:
+ *
+ *     define( 'CDMV_SUPERUSER', 'benutzername' );
+ *
+ * Leer = es gibt keinen Superuser. Das Konto muss Administrator sein.
  * ------------------------------------------------------------------
  */
 if ( ! defined( 'CDMV_SUPERUSER' ) ) {
-	define( 'CDMV_SUPERUSER', 'p710470' );
+	define( 'CDMV_SUPERUSER', '' );
+}
+
+/**
+ * Optional: Benutzer-ID des Superusers. Ist sie gesetzt (> 0), muss sie
+ * zusätzlich zum Benutzernamen passen. Bei 0 merkt sich das Plugin die ID
+ * beim ersten Aufruf selbst. So wird ein später neu angelegtes Konto mit
+ * demselben Benutzernamen nicht zum Superuser.
+ */
+if ( ! defined( 'CDMV_SUPERUSER_ID' ) ) {
+	define( 'CDMV_SUPERUSER_ID', 0 );
 }
 
 final class CDMV_Menu_Visibility {
@@ -32,6 +47,7 @@ final class CDMV_Menu_Visibility {
 	/** Zwischenspeicher der freigeschalteten Berechtigungen je Benutzer-ID. */
 	private static $cap_cache = array();
 	const BAR_OPTION = 'cdmv_bar_nodes';    // Bekannte Admin-Leisten-Einträge (vom Superuser gesehen).
+	const PIN_OPTION = 'cdmv_superuser_pin'; // Gemerkte Benutzer-ID des Superusers (login + id).
 	const PAGE       = 'cdmv-menu-visibility';
 	const NONCE      = 'cdmv_save_';
 
@@ -59,7 +75,10 @@ final class CDMV_Menu_Visibility {
 			self::$cap_cache[ $user->ID ] = $stored['caps'];
 		}
 		foreach ( self::$cap_cache[ $user->ID ] as $cap ) {
-			$allcaps[ $cap ] = true;
+			// „do_not_allow“ ist WordPress' Verbotsmarke und darf nie vergeben werden.
+			if ( is_string( $cap ) && '' !== $cap && 'do_not_allow' !== $cap ) {
+				$allcaps[ $cap ] = true;
+			}
 		}
 		return $allcaps;
 	}
@@ -99,16 +118,56 @@ final class CDMV_Menu_Visibility {
 				$caps = array_merge( $caps, array_values( (array) $tax->cap ) );
 			}
 		}
-		return array_values( array_unique( array_filter( $caps, 'is_string' ) ) );
+		$caps = array_filter(
+			$caps,
+			static function ( $c ) {
+				return is_string( $c ) && '' !== $c && 'do_not_allow' !== $c;
+			}
+		);
+		return array_values( array_unique( $caps ) );
 	}
 
 	/* ------------------------------------------------------------------
 	 * Grundlagen
 	 * ---------------------------------------------------------------- */
 
+	/**
+	 * Superuser ist nur, wer den festgelegten Benutzernamen trägt, Administrator ist
+	 * und dessen Benutzer-ID zur festgelegten bzw. beim ersten Aufruf gemerkten ID passt.
+	 */
 	private static function is_superuser() {
+		static $checked = array();
+
 		$user = wp_get_current_user();
-		return $user->exists() && CDMV_SUPERUSER === $user->user_login;
+		if ( ! $user->exists() || '' === CDMV_SUPERUSER || CDMV_SUPERUSER !== $user->user_login ) {
+			return false;
+		}
+		if ( isset( $checked[ $user->ID ] ) ) {
+			return $checked[ $user->ID ];
+		}
+
+		$ok = self::role_can( $user, 'manage_options' );
+		if ( $ok ) {
+			if ( (int) CDMV_SUPERUSER_ID > 0 ) {
+				$ok = (int) CDMV_SUPERUSER_ID === (int) $user->ID;
+			} else {
+				$pin = get_option( self::PIN_OPTION );
+				if ( ! is_array( $pin ) || ! isset( $pin['login'], $pin['id'] ) || CDMV_SUPERUSER !== $pin['login'] ) {
+					update_option(
+						self::PIN_OPTION,
+						array(
+							'login' => CDMV_SUPERUSER,
+							'id'    => (int) $user->ID,
+						),
+						false
+					);
+				} else {
+					$ok = (int) $pin['id'] === (int) $user->ID;
+				}
+			}
+		}
+		$checked[ $user->ID ] = $ok;
+		return $ok;
 	}
 
 	private static function get_hidden( $user_id ) {
@@ -252,11 +311,31 @@ final class CDMV_Menu_Visibility {
 		self::block_request( $candidates );
 	}
 
-	private static function current_request() {
+	/**
+	 * Die Anfrage in den Lesarten, in denen WordPress sie auswerten kann: nur Adresszeile
+	 * sowie Adresszeile plus Formulardaten (post_type, taxonomy … liest WordPress auch aus
+	 * POST). Gesperrt wird, sobald eine Lesart auf einen ausgeblendeten Bereich führt.
+	 */
+	private static function current_requests() {
+		$get  = wp_unslash( $_GET );
+		$reqs = array( self::current_request( $get ) );
+		if ( ! empty( $_POST ) ) {
+			$merged = array_merge( $get, wp_unslash( $_POST ) );
+			// Die Plugin-Seite bestimmt WordPress ausschließlich aus der Adresszeile.
+			unset( $merged['page'] );
+			if ( isset( $get['page'] ) ) {
+				$merged['page'] = $get['page'];
+			}
+			$reqs[] = self::current_request( $merged );
+		}
+		return $reqs;
+	}
+
+	private static function current_request( $source ) {
 		global $pagenow;
 
 		$args = array();
-		foreach ( wp_unslash( $_GET ) as $k => $v ) {
+		foreach ( (array) $source as $k => $v ) {
 			if ( is_scalar( $v ) ) {
 				$args[ $k ] = (string) $v;
 			}
@@ -336,36 +415,19 @@ final class CDMV_Menu_Visibility {
 	private static function block_request( $candidates ) {
 		global $pagenow;
 
-		$req  = self::current_request();
-		$best = 0;
-		$hits = array();
-		foreach ( $candidates as $c ) {
-			$s = self::score( $req, $c['slug'] );
-			if ( $s > $best ) {
-				$best = $s;
-				$hits = array( $c );
-			} elseif ( $s && $s === $best ) {
-				$hits[] = $c;
+		$blocked = false;
+		foreach ( self::current_requests() as $req ) {
+			if ( self::is_blocked( $req, $candidates ) ) {
+				$blocked = true;
+				break;
 			}
 		}
-		if ( ! $hits ) {
+		if ( ! $blocked ) {
 			return;
-		}
-		foreach ( $hits as $c ) {
-			if ( ! $c['hidden'] ) {
-				return; // Ein sichtbarer Menüpunkt führt auf diese Seite.
-			}
-		}
-		if ( $req['whole'] ) {
-			foreach ( $candidates as $c ) {
-				if ( $c['group'] === $hits[0]['group'] && ! $c['hidden'] ) {
-					return;
-				}
-			}
 		}
 
 		// Ausgeblendetes Dashboard: statt Fehlermeldung zur ersten sichtbaren Seite leiten.
-		if ( 'index.php' === $pagenow && ! isset( $_GET['page'] ) ) {
+		if ( 'index.php' === $pagenow && ! isset( $_GET['page'] ) && empty( $_POST ) ) {
 			foreach ( $candidates as $c ) {
 				if ( $c['hidden'] || ! current_user_can( $c['cap'] ) ) {
 					continue;
@@ -386,6 +448,37 @@ final class CDMV_Menu_Visibility {
 				'back_link' => true,
 			)
 		);
+	}
+
+	/** Führt diese Lesart der Anfrage auf einen ausgeblendeten Bereich? */
+	private static function is_blocked( $req, $candidates ) {
+		$best = 0;
+		$hits = array();
+		foreach ( $candidates as $c ) {
+			$s = self::score( $req, $c['slug'] );
+			if ( $s > $best ) {
+				$best = $s;
+				$hits = array( $c );
+			} elseif ( $s && $s === $best ) {
+				$hits[] = $c;
+			}
+		}
+		if ( ! $hits ) {
+			return false;
+		}
+		foreach ( $hits as $c ) {
+			if ( ! $c['hidden'] ) {
+				return false; // Ein sichtbarer Menüpunkt führt auf diese Seite.
+			}
+		}
+		if ( $req['whole'] ) {
+			foreach ( $candidates as $c ) {
+				if ( $c['group'] === $hits[0]['group'] && ! $c['hidden'] ) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	private static function item_url( $slug, $parent ) {
@@ -623,13 +716,13 @@ final class CDMV_Menu_Visibility {
 			$known[ $node['key'] ] = true;
 			$top_off               = ! isset( $checked[ $node['key'] ] );
 			$visible               = 0;
-			if ( isset( $wanted[ $node['key'] ] ) && ! self::role_can( $user, $node['cap'] ) ) {
+			if ( isset( $wanted[ $node['key'] ] ) && 'do_not_allow' !== $node['cap'] && ! self::role_can( $user, $node['cap'] ) ) {
 				$grant[] = $node['key'];
 				$caps    = array_merge( $caps, self::caps_for( $node['cap'], $node['slug'] ) );
 			}
 			foreach ( $node['children'] as $child ) {
 				$known[ $child['key'] ] = true;
-				if ( isset( $wanted[ $child['key'] ] ) && ! self::role_can( $user, $child['cap'] ) ) {
+				if ( isset( $wanted[ $child['key'] ] ) && 'do_not_allow' !== $child['cap'] && ! self::role_can( $user, $child['cap'] ) ) {
 					$grant[] = $child['key'];
 					$caps    = array_merge( $caps, self::caps_for( $child['cap'], $child['slug'] ) );
 				}
@@ -704,7 +797,10 @@ final class CDMV_Menu_Visibility {
 
 	/** Hinweis + Freischalt-Haken für Einträge, die die Rolle allein nicht sehen darf. */
 	private static function grant_html( $key, $cap, $granted ) {
-		return ' <label class="cdmv-grantbox"><em class="cdmv-norole">für diese Rolle nicht sichtbar –</em> '
+		if ( 'do_not_allow' === $cap ) {
+			return ' <em class="cdmv-norole cdmv-grantbox">für niemanden freigegeben, nicht freischaltbar</em>';
+		}
+		return' <label class="cdmv-grantbox"><em class="cdmv-norole">für diese Rolle nicht sichtbar –</em> '
 			. '<input type="checkbox" class="cdmv-grant" name="cdmv_grant[]" value="' . esc_attr( $key ) . '"' . checked( isset( $granted[ $key ] ), true, false ) . '> '
 			. '<span class="cdmv-norole">trotzdem freischalten</span> <code>' . esc_html( $cap ) . '</code></label>';
 	}

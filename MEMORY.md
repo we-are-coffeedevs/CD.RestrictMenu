@@ -6,19 +6,19 @@
 ## Arbeitsregeln
 - Commit und Push macht der Nutzer selbst. Nicht committen, nicht pushen, nicht danach fragen; nur auf geänderte Dateien hinweisen.
 - MEMORY.md muss Projektkontext + Verständnis vollständig enthalten (Nutzung an anderem PC ohne Verlust).
-- Versionierung: Bei jeder Änderung die Version erhöhen (SemVer, Patch +1; Minor/Major nur auf Ansage). Einzige Stelle: Header `Version:` in `menu-sichtbarkeit.php`.
+- Versionierung: Bei jeder Änderung die Version erhöhen (SemVer, Patch +1; Minor/Major nur auf Ansage). Einzige Stelle: Header `Version:` in `cd-RestrictMenu.php`.
 - Sprache: Deutsch (UI, Doku, Kommunikation).
 - Hinweis: Diese Regeln sind aus den anderen coffeedevs-Plugins übernommen („bekanntes Schema“); für dieses Projekt hat der Nutzer sie nicht eigens ausgesprochen.
 
 ## Projekt
 - Name im Backend (Plugin-Header): **CD.RestrictMenu**. Link in der Benutzerliste und Seitentitel heißen weiterhin **Menü-Sichtbarkeit** (vom Nutzer nicht umbenannt).
 - Beschreibung (Vorgabe des Nutzers, wörtlich): „Ermöglicht es einem festgelegten Superuser die Backend-Navigation anzupassen, sodass Sie die beste Benutzererfahrung in der Bedienung erhalten und nicht durch unnütze Inhalte gestört werden.“
-- Typ: WordPress-**Must-Use-Plugin**, bewusst **eine einzige Datei** `menu-sichtbarkeit.php` (CSS und JS inline), Ziel `wp-content/mu-plugins/`.
+- Typ: WordPress-**Must-Use-Plugin**, bewusst **eine einzige Datei** `cd-RestrictMenu.php` (CSS und JS inline), Ziel `wp-content/mu-plugins/`.
 - Lokaler Ordner: `F:\claude-local\we-are-coffeedevs--wp-mu_RestrictBackendNavigation\` (Repo-Root; bis 2026-11-10 `wp_menu_sichtbarkeit`, vom Nutzer verschoben).
 - Remote: https://github.com/we-are-coffeedevs/wp-mu_RestrictBackendNavigation.git
 - `.repo-lock.json` = Sperrmarker aus dem Repo-Setup; unverändert lassen.
 - Präfix: `cdmv` / `CDMV_` (Klasse `CDMV_Menu_Visibility`). Der Präfix stammt vom ursprünglichen Namen und wurde bei der Umbenennung nicht geändert (sonst gingen gespeicherte Daten verloren).
-- Einsatz: Website Weingut Grafenhof (WooCommerce, Elementor, VamTAM-Theme). Superuser dort vorläufig `p710470` (einziger Administrator).
+- Einsatz: Kundenwebsite mit WooCommerce, Elementor und VamTAM-Theme. Website-Name und Admin-Login stehen bewusst nicht in dieser Datei (Audit-Befund 5).
 
 ## Anforderungen (Vorgaben des Nutzers)
 1. Im Code wird ein bestehender Benutzer als Superuser festgelegt. Nur er bestimmt für andere Benutzer, welche Navigationselemente im Backend angezeigt werden.
@@ -28,11 +28,13 @@
 5. Entscheidungen auf Rückfrage: ausblenden **und** Direktaufruf sperren; Superuser per **Benutzername**; **auch Admin-Leiste** steuerbar.
 6. Später ergänzt: „trotzdem freischalten“, goldener Link, Kästen je halbe Breite, Titel-Korrekturen der Admin-Leiste, Drucken/PDF, Copy2User, Umbenennung.
 
-## Architektur (Stand v1.0.0)
-Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
+## Architektur (Stand v1.0.1)
+Alles in `cd-RestrictMenu.php`, statische Klasse `CDMV_Menu_Visibility`.
 
 ### Konstanten und Daten
-- `CDMV_SUPERUSER`: Login-Name des Superusers; per `defined()`-Prüfung auch in der `wp-config.php` setzbar. Vergleich strikt gegen `user_login`.
+- `CDMV_SUPERUSER`: Login-Name des Superusers. In der Plugin-Datei **leer** (= kein Superuser); der echte Wert gehört in die `wp-config.php`. Vergleich strikt gegen `user_login`.
+- `CDMV_SUPERUSER_ID` (optional, Standard 0): feste Benutzer-ID. Bei 0 merkt sich das Plugin die ID beim ersten gültigen Aufruf in der Option `cdmv_superuser_pin` (`login` + `id`); ändert sich der Login in der Konstante, wird neu gemerkt.
+- `is_superuser()`: Login passt **und** Konto hat `manage_options` (ohne Freischaltungen geprüft) **und** ID passt zur Konstante bzw. zur gemerkten ID. `target_user()`, `row_action()` und `grant_caps()` schließen weiterhin allein nach Login aus (vorsichtige Richtung: ein Konto mit dem Superuser-Namen wird nie eingeschränkt oder freigeschaltet).
 - User-Meta `cdmv_hidden` (Array): `menu` (Hashes ausgeblendeter Menüpunkte), `bar` (IDs ausgeblendeter Leisten-Einträge), `grant` (Hashes freigeschalteter Punkte, für die Anzeige), `caps` (daraus abgeleitete Berechtigungen). Leer ⇒ Meta wird gelöscht.
 - Option `cdmv_bar_nodes` (autoload aus): alle Leisten-Einträge, die der Superuser je gesehen hat (`t` Titel, `p` Eltern-ID, `g` Gruppe).
 - **Gespeichert wird, was ausgeblendet ist**, nicht was sichtbar ist ⇒ neue Benutzer und neu installierte Plugins sind automatisch sichtbar.
@@ -54,6 +56,7 @@ Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
   - Core-Datei (existiert in `wp-admin/`): Datei muss `$pagenow` entsprechen. `edit.php`/`post-new.php` ohne `post_type` passen nur auf Beiträge. Hat die Anfrage `page=`, passen Core-Kandidaten ohne `page` nicht (sonst gewänne „Alle Produkte“ gegen eine Plugin-Unterseite).
   - Sonst Plugin-Seite: Slug wird als `page=<slug>` geparst (deckt z. B. `wc-admin&path=/analytics/overview` ab).
   - `post.php` und `term.php` werden dem Bereich (`edit.php?post_type=…`, `upload.php`, `edit-tags.php?taxonomy=…`) zugeordnet und nur gesperrt, wenn der **gesamte** Bereich ausgeblendet ist (sonst könnte man nach „Erstellen“ nicht weiterbearbeiten).
+- Zwei Lesarten je Anfrage (`current_requests()`): nur `$_GET` sowie `$_GET` + `$_POST` (WordPress liest `post_type`/`taxonomy` aus `$_REQUEST`); `page` stammt immer nur aus `$_GET`. Gesperrt wird, sobald **eine** Lesart gesperrt ist (`is_blocked()`). Per Skript getestet (8 Fälle, u. a. POST mit `post_type=page` im Body).
 - Gesperrt: `wp_die` 403 „Kein Zugriff“. Ausnahme Dashboard (`index.php`): Weiterleitung auf die erste sichtbare, erlaubte Seite.
 - Greift nur bei normalen Backend-Seitenaufrufen (dort feuert `admin_menu`), nicht bei `admin-ajax.php`, `admin-post.php`, REST. Netzwerk-Admin (Multisite) wird nicht behandelt.
 
@@ -61,7 +64,14 @@ Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
 - `role_can()` prüft die Berechtigung ohne Freischaltungen (Flag `$bypass`), damit die Seite zeigt, was die Rolle allein darf.
 - `caps_for()`: Berechtigung des Menüpunkts; bei `edit.php`/`post-new.php` zusätzlich alle Rechte des Inhaltstyps (ohne Meta-Caps `edit_post`, `read_post`, `delete_post`), bei `edit-tags.php` die der Taxonomie – sonst sähe der Benutzer nur die Liste.
 - Vergabe dynamisch über `user_has_cap`, nichts wird in Rolle oder Benutzer geschrieben. Plugin entfernt ⇒ Freischaltung weg.
-- Bewusst keine Sperrliste gefährlicher Berechtigungen; die Berechtigung steht sichtbar hinter dem Haken, der Superuser entscheidet.
+- Bewusst keine Sperrliste gefährlicher Berechtigungen; die Berechtigung steht sichtbar hinter dem Haken, der Superuser entscheidet. Einzige Ausnahme: `do_not_allow` (WordPress' Verbotsmarke) wird nie vergeben – ausgeschlossen in `caps_for()`, `grant_caps()`, `handle_save()`, und die Seite zeigt dort keinen Haken.
+
+### Sicherheitsaudit (2026-11-10, Code-Durchsicht, kein Test in WordPress)
+- Behoben in v1.0.1: (1) Superuser nur über Login → jetzt Login + ID + `manage_options`; (3) Sperre per POST umgehbar; (4) `do_not_allow` freischaltbar; (5) Admin-Login im Quelltext und in der Doku.
+- **Bewusst nicht behoben (Entscheidung des Nutzers):** (2) User-Meta `cdmv_hidden` ist ungeschützt. Wer dieses Meta-Feld beschreiben kann (z. B. über eine fremde Schnittstelle, die beliebige Benutzer-Meta schreibt), kann Einschränkungen löschen oder sich über `caps` Berechtigungen eintragen. Vorgeschlagen war eine Signatur mit den WordPress-Salts; nicht umgesetzt.
+- Unauffällig: Seite nur für Superuser registriert, Prüfung bei Öffnen und Speichern, Nonces an Zielbenutzer gebunden, Ausgaben maskiert, kein SQL, keine eigenen AJAX-/REST-Endpunkte, Speichern übernimmt nur Schlüssel aus dem aktuellen Menü.
+- Grundsätzliche Grenzen: Sperre wirkt nicht auf REST, `admin-ajax.php`, `admin-post.php` und clientseitig nachladende Oberflächen; wer Code ausführen darf (Plugins installieren, Theme-Editor, Dateizugriff), kann das Plugin aushebeln.
+- Der frühere Standardwert der Konstante (echter Admin-Login) und der Website-Name stehen noch in der Git-Historie (Commits vom 2026-11-10); Repo ist privat.
 
 ### Admin-Leiste
 - Einträge werden vor dem Rendern erfasst (`get_nodes()` liefert danach nichts mehr). Backend und Frontend haben unterschiedliche Einträge ⇒ Sammlung über alle Aufrufe des Superusers.
@@ -79,7 +89,7 @@ Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
 - **Drucken / PDF:** `window.print()` mit Print-CSS. Kästen als CSS-Tabelle (`display: table`, Überschrift `table-header-group`) ⇒ Überschrift wiederholt sich je Druckseite; Hauptpunkte `break-inside: avoid`; zweiter Kasten auf neuer Seite; WP-Rahmen und Bedienelemente (`.cdmv-noprint`) ausgeblendet; Zeitstempel „Stand:“ nur im Druck.
 
 ## Status
-- Aktuelle Version: **1.0.0** (vom Nutzer nach der Umbenennung zurückgesetzt; Entwicklungsstände davor liefen bis 1.3.0).
+- Aktuelle Version: **1.0.1** (1.0.0 vom Nutzer nach der Umbenennung zurückgesetzt; Entwicklungsstände davor liefen bis 1.3.0).
 - PHP-Syntax geprüft (PHP 8.3 lint, Laragon: `C:\laragon\bin\php\php-8.3.14-Win32-vs16-x64\php.exe -n -l`).
 - Der Nutzer hat das Plugin auf der Zielseite im Einsatz (Screenshots der Einstellungsseite). Nicht von Claude in WordPress getestet; ungeprüft insbesondere: Druckbild (wiederholte Überschrift), Copy2User, Sperre per Direktaufruf bei Plugin-Seiten, Freischaltung der Gutscheine.
 
@@ -91,6 +101,8 @@ Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
 - Keine Aufräumroutine: `cdmv_hidden` und `cdmv_bar_nodes` bleiben nach dem Entfernen in der Datenbank.
 
 ## Änderungslog
+- 2026-11-10: v1.0.1: Sicherheitsaudit, Befunde 1, 3, 4, 5 behoben (Superuser an ID und Administrator-Recht gebunden, neue Konstante `CDMV_SUPERUSER_ID`, Option `cdmv_superuser_pin`; Sperre wertet auch POST aus; `do_not_allow` ausgeschlossen; `CDMV_SUPERUSER` in der Datei leer, Login und Website-Name aus der Doku entfernt). Befund 2 auf Nutzerwunsch nicht umgesetzt.
+- 2026-11-10: Plugin-Datei auf Nutzerwunsch umbenannt: `menu-sichtbarkeit.php` → `cd-RestrictMenu.php`. Beim Hochladen muss die alte Datei aus `mu-plugins` gelöscht werden, sonst laden beide und die doppelte Klasse `CDMV_Menu_Visibility` erzeugt einen Fatal Error. Banner: coffeedevs-Logo (aus `favicon.svg` des Nutzers) bei „by coffeedevs“ eingebettet.
 - 2026-11-10: README-Banner `assets/banner.svg` (1400×640, handgeschriebenes SVG: links Name, Nutzen und vier Vorteile, rechts die als Vektor nachgebaute Einstellungsseite mit Plugins/Benutzer/Werkzeuge; Farben Dunkelgrau `#1d2327` und Gold `#f0b849`; keine eingebetteten Schriften oder Bilder). Oben in der README eingebunden. Nur Doku, keine Versionsänderung.
 - 2026-11-10: Projekt vom Nutzer in den Repo-Ordner `we-are-coffeedevs--wp-mu_RestrictBackendNavigation` verschoben; Pfad und Remote hier nachgetragen.
 - 2026-11-10: README.md und MEMORY.md angelegt.

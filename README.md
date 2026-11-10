@@ -31,23 +31,27 @@ Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plug
 - Sichtbar ist es unter *Plugins* im Reiter **Must-Use** (dort nur zur Information).
 
 ### Schritte
-1. **Superuser eintragen:** In `menu-sichtbarkeit.php` oben den Benutzernamen (Login) eintragen:
+1. **Superuser eintragen:** In die `wp-config.php` (oberhalb von „That's all, stop editing“) den Benutzernamen (Login) eines Administrators schreiben:
    ```php
    define( 'CDMV_SUPERUSER', 'benutzername' );
    ```
-   Alternativ dieselbe Zeile in die `wp-config.php` schreiben (oberhalb von „That's all, stop editing“); dann bleibt die Plugin-Datei unverändert.
+   So steht der Login nicht im Plugin-Quelltext und bleibt bei Updates erhalten. In der Plugin-Datei ist der Wert leer; ohne diesen Eintrag gibt es keinen Superuser. Optional zusätzlich die Benutzer-ID festlegen:
+   ```php
+   define( 'CDMV_SUPERUSER_ID', 1 );
+   ```
+   Ohne diese Zeile merkt sich das Plugin die ID beim ersten Aufruf des Superusers selbst.
 2. **Ordner prüfen:** Per FTP/SFTP oder Dateimanager nach `wp-content/` wechseln. Fehlt der Ordner `mu-plugins`, ihn anlegen.
-3. **Datei hochladen:** `menu-sichtbarkeit.php` direkt nach `wp-content/mu-plugins/` kopieren (nicht in einen Unterordner). `README.md`, `MEMORY.md` und der Ordner `assets` gehören nicht auf den Server.
+3. **Datei hochladen:** `cd-RestrictMenu.php` direkt nach `wp-content/mu-plugins/` kopieren (nicht in einen Unterordner). `README.md`, `MEMORY.md` und der Ordner `assets` gehören nicht auf den Server.
 4. **Prüfen:** Im Backend unter *Plugins → Must-Use* muss **CD.RestrictMenu** stehen. Als Superuser unter *Benutzer* einen Namen überfahren – der Link **Menü-Sichtbarkeit** erscheint.
 
 ### Update
-Datei `menu-sichtbarkeit.php` auf dem Server durch die neue Fassung ersetzen. Gespeicherte Einstellungen bleiben erhalten. Wurde der Superuser in der Plugin-Datei eingetragen (nicht in der `wp-config.php`), ihn in der neuen Datei erneut eintragen.
+Datei `cd-RestrictMenu.php` auf dem Server durch die neue Fassung ersetzen. Gespeicherte Einstellungen bleiben erhalten. Der Superuser steht in der `wp-config.php` und ist vom Update nicht betroffen. Liegt noch eine ältere Datei `menu-sichtbarkeit.php` im Ordner, sie löschen – beide zusammen führen zu einem Fatal Error.
 
 ### Entfernen
-Datei aus `wp-content/mu-plugins/` löschen. Alle Einschränkungen und Freischaltungen sind damit sofort aufgehoben. In der Datenbank bleiben zurück und können bei Bedarf gelöscht werden: der Benutzer-Meta-Schlüssel `cdmv_hidden` und die Option `cdmv_bar_nodes`.
+Datei aus `wp-content/mu-plugins/` löschen. Alle Einschränkungen und Freischaltungen sind damit sofort aufgehoben. In der Datenbank bleiben zurück und können bei Bedarf gelöscht werden: der Benutzer-Meta-Schlüssel `cdmv_hidden` sowie die Optionen `cdmv_bar_nodes` und `cdmv_superuser_pin`.
 
 ### Voraussetzungen
-WordPress, PHP ≥ 7.4. Der Superuser sollte Administrator sein, damit der Baum das vollständige Menü zeigt.
+WordPress, PHP ≥ 7.4. Der Superuser muss Administrator sein (Berechtigung `manage_options`).
 
 ## Hinweise
 - **Speichern vor Copy2User:** Übertragen wird der zuletzt gespeicherte Stand. Das Profil des Empfängers wird vollständig überschrieben.
@@ -55,11 +59,13 @@ WordPress, PHP ≥ 7.4. Der Superuser sollte Administrator sein, damit der Baum 
 - **Frontend-Einträge der Admin-Leiste** (z. B. „Seite bearbeiten“) erscheinen im Baum erst, nachdem der Superuser die Website einmal angemeldet im Frontend besucht hat.
 - **Bearbeiten-Ansichten** (bestehenden Beitrag oder Seite öffnen) werden nur gesperrt, wenn der ganze Bereich ausgeblendet ist.
 - **Neue Plugins:** Später hinzukommende Menüpunkte sind zunächst für alle sichtbar, bis sie abgewählt werden.
-- **Aussperren:** Der Superuser kann sich nicht selbst einschränken. Ist der eingetragene Benutzername falsch, gibt es keinen Superuser und der Link erscheint bei niemandem – bestehende Einschränkungen gelten dann weiter.
+- **Aussperren:** Der Superuser kann sich nicht selbst einschränken. Ist der eingetragene Benutzername falsch oder leer, gibt es keinen Superuser und der Link erscheint bei niemandem – bestehende Einschränkungen gelten dann weiter.
+- **Superuser-Konto neu angelegt oder gewechselt:** Das Plugin bindet den Superuser an Benutzername **und** Benutzer-ID. Wird das Konto gelöscht und mit demselben Namen neu angelegt, ist es nicht mehr Superuser. Dann `CDMV_SUPERUSER_ID` in der `wp-config.php` auf die neue ID setzen oder die Option `cdmv_superuser_pin` löschen. Ein Wechsel auf einen anderen Benutzernamen wird automatisch übernommen.
+- **Grenzen der Sperre:** Gesperrt werden normale Backend-Seiten. Über REST-Schnittstelle, `admin-ajax.php` und Oberflächen, die Inhalte ohne Neuladen nachladen, bleibt erreichbar, was die Rolle des Benutzers erlaubt. Das Plugin räumt die Bedienung auf; es ersetzt keine Rechtevergabe über Rollen. Wer Plugins installieren oder Dateien ändern darf, kann es aushebeln.
 
 ## Struktur
 ```
-menu-sichtbarkeit.php   das gesamte Plugin (eine Datei, inkl. CSS und JS)
+cd-RestrictMenu.php   das gesamte Plugin (eine Datei, inkl. CSS und JS)
 assets/banner.svg       Banner für diese README (nicht Teil des Plugins)
 README.md               diese Datei
 MEMORY.md               Projektkontext und Entscheidungen

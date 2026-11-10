@@ -50,7 +50,24 @@
     <text x="94" y="476">Profil kopieren und als PDF dokumentieren</text>
   </g>
 
-  <text x="60" y="560" font-size="14" fill="#8c8f94">by coffeedevs</text>
+  <!-- coffeedevs-Logo -->
+  <svg x="60" y="532" width="40" height="40" viewBox="0 0 120 120">
+    <rect width="120" height="120" rx="26" fill="#F6F1EA"/>
+    <g transform="translate(60 61) scale(1.08) translate(-66 -59)">
+      <path d="M40 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#2A1A12" stroke-width="7.6" stroke-linecap="round"/>
+      <path d="M54 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#2A1A12" stroke-width="7.6" stroke-linecap="round"/>
+      <path d="M68 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#2A1A12" stroke-width="7.6" stroke-linecap="round"/>
+      <path d="M40 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#C0FFEE" stroke-width="4" stroke-linecap="round"/>
+      <path d="M54 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#C0FFEE" stroke-width="4" stroke-linecap="round"/>
+      <path d="M68 36 c-4 -6 4 -10 0 -16" fill="none" stroke="#C0FFEE" stroke-width="4" stroke-linecap="round"/>
+      <path d="M84 54 h8 a12 12 0 0 1 0 24 h-8" fill="none" stroke="#2A1A12" stroke-width="7"/>
+      <path d="M24 44 H84 V78 a22 22 0 0 1 -22 22 H46 a22 22 0 0 1 -22 -22 Z" fill="#2A1A12"/>
+      <path d="M44 62 L36 71 L44 80" fill="none" stroke="#F6F1EA" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M64 62 L72 71 L64 80" fill="none" stroke="#F6F1EA" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M58 60 L50 82" fill="none" stroke="#F6F1EA" stroke-width="5" stroke-linecap="round"/>
+    </g>
+  </svg>
+  <text x="112" y="557" font-size="15" fill="#c3c4c7">by <tspan font-weight="600" fill="#ffffff">coffeedevs</tspan></text>
 
   <!-- Rechte Spalte: nachgebaute Einstellungsseite -->
   <g filter="url(#shadow)">
