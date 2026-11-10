@@ -18,7 +18,9 @@ Der Superuser wird im Plugincode festgelegt. Nur er kann für jeden anderen Benu
 
 ## Installation
 
-### Besonderheiten eines Must-Use-Plugins
+<details>
+<summary><strong>Besonderheiten eines Must-Use-Plugins</strong></summary>
+
 Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plugin:
 - Es liegt im Ordner `wp-content/mu-plugins/`, nicht in `wp-content/plugins/`.
 - Es ist **immer aktiv**. Es gibt keinen Aktivieren-/Deaktivieren-Link; im Backend lässt es sich weder abschalten noch löschen. Genau deshalb eignet es sich für diese Aufgabe: Ein eingeschränkter Benutzer kann es nicht einfach deaktivieren.
@@ -29,6 +31,8 @@ Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plug
 - Aktivierungs- und Deinstallationsroutinen gibt es nicht.
 - In einer Multisite gilt es für alle Websites des Netzwerks.
 - Sichtbar ist es unter *Plugins* im Reiter **Must-Use** (dort nur zur Information).
+
+</details>
 
 ### Schritte
 1. **Superuser eintragen:** In die `wp-config.php` (oberhalb von „That's all, stop editing“) den Benutzernamen (Login) eines Administrators schreiben:
