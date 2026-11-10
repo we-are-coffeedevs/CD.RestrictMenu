@@ -1,5 +1,7 @@
 # CD.RestrictMenu
 
+![CD.RestrictMenu – die Backend-Navigation von WordPress für jeden Benutzer einzeln festlegen](assets/banner.svg)
+
 WordPress-Must-Use-Plugin. Ermöglicht es einem festgelegten Superuser, die Backend-Navigation anzupassen, sodass Sie die beste Benutzererfahrung in der Bedienung erhalten und nicht durch unnütze Inhalte gestört werden.
 
 Der Superuser wird im Plugincode festgelegt. Nur er kann für jeden anderen Benutzer einzeln bestimmen, welche Einträge der Backend-Navigation und der Admin-Leiste sichtbar sind. Für den Superuser selbst gelten keine Einschränkungen.
@@ -35,7 +37,7 @@ Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plug
    ```
    Alternativ dieselbe Zeile in die `wp-config.php` schreiben (oberhalb von „That's all, stop editing“); dann bleibt die Plugin-Datei unverändert.
 2. **Ordner prüfen:** Per FTP/SFTP oder Dateimanager nach `wp-content/` wechseln. Fehlt der Ordner `mu-plugins`, ihn anlegen.
-3. **Datei hochladen:** `menu-sichtbarkeit.php` direkt nach `wp-content/mu-plugins/` kopieren (nicht in einen Unterordner). `README.md` und `MEMORY.md` gehören nicht auf den Server.
+3. **Datei hochladen:** `menu-sichtbarkeit.php` direkt nach `wp-content/mu-plugins/` kopieren (nicht in einen Unterordner). `README.md`, `MEMORY.md` und der Ordner `assets` gehören nicht auf den Server.
 4. **Prüfen:** Im Backend unter *Plugins → Must-Use* muss **CD.RestrictMenu** stehen. Als Superuser unter *Benutzer* einen Namen überfahren – der Link **Menü-Sichtbarkeit** erscheint.
 
 ### Update
@@ -58,6 +60,7 @@ WordPress, PHP ≥ 7.4. Der Superuser sollte Administrator sein, damit der Baum 
 ## Struktur
 ```
 menu-sichtbarkeit.php   das gesamte Plugin (eine Datei, inkl. CSS und JS)
+assets/banner.svg       Banner für diese README (nicht Teil des Plugins)
 README.md               diese Datei
 MEMORY.md               Projektkontext und Entscheidungen
 ```

@@ -91,6 +91,7 @@ Alles in `menu-sichtbarkeit.php`, statische Klasse `CDMV_Menu_Visibility`.
 - Keine Aufräumroutine: `cdmv_hidden` und `cdmv_bar_nodes` bleiben nach dem Entfernen in der Datenbank.
 
 ## Änderungslog
+- 2026-11-10: README-Banner `assets/banner.svg` (1400×640, handgeschriebenes SVG: links Name, Nutzen und vier Vorteile, rechts die als Vektor nachgebaute Einstellungsseite mit Plugins/Benutzer/Werkzeuge; Farben Dunkelgrau `#1d2327` und Gold `#f0b849`; keine eingebetteten Schriften oder Bilder). Oben in der README eingebunden. Nur Doku, keine Versionsänderung.
 - 2026-11-10: Projekt vom Nutzer in den Repo-Ordner `we-are-coffeedevs--wp-mu_RestrictBackendNavigation` verschoben; Pfad und Remote hier nachgetragen.
 - 2026-11-10: README.md und MEMORY.md angelegt.
 - 2026-11-10: Umbenennung im Plugin-Header in **CD.RestrictMenu**, neue Beschreibung, Version auf 1.0.0 zurückgesetzt.
