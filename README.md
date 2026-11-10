@@ -49,24 +49,31 @@ Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plug
 4. **Prüfen:** Im Backend unter *Plugins → Must-Use* muss **CD.RestrictMenu** stehen. Als Superuser unter *Benutzer* einen Namen überfahren – der Link **Menü einschränken** erscheint.
 
 ### Update
-Datei `cd-RestrictMenu.php` auf dem Server durch die neue Fassung ersetzen. Gespeicherte Einstellungen bleiben erhalten. Der Superuser steht in der `wp-config.php` und ist vom Update nicht betroffen. Liegt noch eine ältere Datei `menu-sichtbarkeit.php` im Ordner, sie löschen – beide zusammen führen zu einem Fatal Error.
-
+Datei `cd-RestrictMenu.php` auf dem Server durch die neue Fassung ersetzen. Gespeicherte Einstellungen bleiben erhalten. Der Superuser steht in der `wp-config.php` und ist vom Update nicht betroffen.
 ### Entfernen
 Ein Must-Use-Plugin hat keine Deinstallationsroutine: WordPress bemerkt nicht, wenn die Datei gelöscht wird. Die Daten müssen deshalb **vor** dem Löschen der Datei entfernt werden. Dafür gibt es zwei Wege.
 
-**Weg 1 – Link im Backend (als Superuser):**
+<details>
+<summary><strong>Weg 1 – Link im Backend (als Superuser)</strong></summary>
+
 1. *Plugins → Must-Use* öffnen. Unter **CD.RestrictMenu** auf **Plugin-Daten entfernen** klicken und bestätigen.
 2. Datei `cd-RestrictMenu.php` aus `wp-content/mu-plugins/` löschen.
 
 Nach dem Klick legt das Plugin im verwendeten Browser 24 Stunden lang keine neuen Daten an, damit bis zum Löschen der Datei nichts nachwächst. Wer in dieser Zeit erneut „Menü einschränken“ öffnet, nutzt das Plugin wieder normal.
 
-**Weg 2 – Schalter in der `wp-config.php` (ohne Backend-Zugang):**
+</details>
+
+<details>
+<summary><strong>Weg 2 – Schalter in der <code>wp-config.php</code> (ohne Backend-Zugang)</strong></summary>
+
 1. In die `wp-config.php` eintragen:
    ```php
    define( 'CDMV_CLEANUP', true );
    ```
 2. Eine beliebige Seite der Website aufrufen. Das Plugin entfernt dabei alle Daten und ruht, solange der Schalter gesetzt ist.
 3. Datei `cd-RestrictMenu.php` aus `wp-content/mu-plugins/` löschen, danach die Zeile wieder aus der `wp-config.php` entfernen.
+
+</details>
 
 In beiden Fällen sind alle Einschränkungen und Freischaltungen sofort aufgehoben. Ist die Datei bereits gelöscht, siehe FAQ.
 
@@ -85,7 +92,9 @@ WordPress, PHP ≥ 7.4. Der Superuser muss Administrator sein (Berechtigung `man
 
 ## FAQ
 
-### Die Plugin-Datei ist schon gelöscht – wie entferne ich die Reste aus der Datenbank von Hand?
+<details>
+<summary><strong>Die Plugin-Datei ist schon gelöscht – wie entferne ich die Reste aus der Datenbank von Hand?</strong></summary>
+
 Das Plugin legt genau drei Dinge ab:
 
 | Wo | Schlüssel | Inhalt |
@@ -108,11 +117,21 @@ wp db query "DELETE FROM $(wp db prefix)usermeta WHERE meta_key = 'cdmv_hidden'"
 
 Schaden richten die Reste nicht an: Ohne die Plugin-Datei liest sie niemand, Einschränkungen und Freischaltungen sind wirkungslos. In einer Multisite liegen die beiden Optionen je Website vor.
 
-### Ich habe „Plugin-Daten entfernen“ geklickt, will das Plugin aber doch weiter nutzen. Was nun?
+</details>
+
+<details>
+<summary><strong>Ich habe „Plugin-Daten entfernen“ geklickt, will das Plugin aber doch weiter nutzen. Was nun?</strong></summary>
+
 Einfach unter *Benutzer* wieder **Menü einschränken** öffnen. Das Plugin arbeitet dann normal weiter; die entfernten Profile sind allerdings weg und müssen neu angelegt werden.
 
-### Warum erscheint der Link „Plugin-Daten entfernen“ nicht?
+</details>
+
+<details>
+<summary><strong>Warum erscheint der Link „Plugin-Daten entfernen“ nicht?</strong></summary>
+
 Er wird nur dem Superuser angezeigt, und nur im Reiter *Must-Use* der Plugin-Liste.
+
+</details>
 
 ## Struktur
 ```
