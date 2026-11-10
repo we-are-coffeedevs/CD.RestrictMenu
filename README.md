@@ -7,12 +7,12 @@ WordPress-Must-Use-Plugin. Ermöglicht es einem festgelegten Superuser, die Back
 Der Superuser wird im Plugincode festgelegt. Nur er kann für jeden anderen Benutzer einzeln bestimmen, welche Einträge der Backend-Navigation und der Admin-Leiste sichtbar sind. Für den Superuser selbst gelten keine Einschränkungen.
 
 ## Funktionen
-- **Link in der Benutzerliste:** Unter *Benutzer* erscheint beim Überfahren eines Benutzernamens der Link **Menü-Sichtbarkeit** (goldfarben). Nur der Superuser sieht ihn, und nicht bei sich selbst.
+- **Link in der Benutzerliste:** Unter *Benutzer* erscheint beim Überfahren eines Benutzernamens der Link **Menü einschränken** (goldfarben). Nur der Superuser sieht ihn, und nicht bei sich selbst.
 - **Zugriffsschutz:** Die Einstellungsseite wird nur für den Superuser registriert. Beim Öffnen und bei jedem Speichern wird erneut geprüft, ob der Aufrufer der Superuser ist (zusätzlich Nonce).
 - **Baum der Backend-Navigation:** gleiche Reihenfolge wie im WordPress-Menü, mit Haupt- und Unterpunkten, Icons und je einer Checkbox. Haken = sichtbar. Ein neuer Benutzer hat alle Haken; beim Öffnen wird der gespeicherte Stand eingelesen.
 - **Admin-Leiste:** zweiter Baum für die obere Leiste (Toolbar) mit eigenen Checkboxen.
 - **Sperre per Direktaufruf:** Ausgeblendete Seiten sind nicht nur unsichtbar, sondern auch über die URL gesperrt (Meldung „Kein Zugriff“). Ist das Dashboard ausgeblendet, wird auf die erste sichtbare Seite weitergeleitet.
-- **Trotzdem freischalten:** Einträge, die die Rolle eines Benutzers nicht sehen darf, sind markiert und lassen sich über einen zusätzlichen Haken erlauben. Der Benutzer erhält dafür die dahinter genannte Berechtigung.
+- **Trotzdem freischalten:** Einträge, die die Rolle eines Benutzers nicht sehen darf, sind markiert und lassen sich über einen zusätzlichen Haken erlauben. Der Benutzer erhält dafür die dahinter genannte Berechtigung. Berechtigungen, die Administrator-Rechten gleichkommen, sind mit „⚠ weitreichend“ markiert und müssen beim Speichern eigens bestätigt werden.
 - **Copy2User:** überträgt das gespeicherte Rechteprofil auf einen anderen Benutzer derselben Benutzergruppe (ohne Superuser).
 - **Drucken / PDF:** druckt beide Kästen in voller Länge zu Dokumentationszwecken; im Druckdialog „Als PDF speichern“ wählen. Die Kastenüberschrift wird auf jeder Seite wiederholt, Gruppen werden nicht mitten im Text getrennt.
 
@@ -42,13 +42,29 @@ Ein Must-Use-Plugin („mu-plugin“) unterscheidet sich von einem normalen Plug
    Ohne diese Zeile merkt sich das Plugin die ID beim ersten Aufruf des Superusers selbst.
 2. **Ordner prüfen:** Per FTP/SFTP oder Dateimanager nach `wp-content/` wechseln. Fehlt der Ordner `mu-plugins`, ihn anlegen.
 3. **Datei hochladen:** `cd-RestrictMenu.php` direkt nach `wp-content/mu-plugins/` kopieren (nicht in einen Unterordner). `README.md`, `MEMORY.md` und der Ordner `assets` gehören nicht auf den Server.
-4. **Prüfen:** Im Backend unter *Plugins → Must-Use* muss **CD.RestrictMenu** stehen. Als Superuser unter *Benutzer* einen Namen überfahren – der Link **Menü-Sichtbarkeit** erscheint.
+4. **Prüfen:** Im Backend unter *Plugins → Must-Use* muss **CD.RestrictMenu** stehen. Als Superuser unter *Benutzer* einen Namen überfahren – der Link **Menü einschränken** erscheint.
 
 ### Update
 Datei `cd-RestrictMenu.php` auf dem Server durch die neue Fassung ersetzen. Gespeicherte Einstellungen bleiben erhalten. Der Superuser steht in der `wp-config.php` und ist vom Update nicht betroffen. Liegt noch eine ältere Datei `menu-sichtbarkeit.php` im Ordner, sie löschen – beide zusammen führen zu einem Fatal Error.
 
 ### Entfernen
-Datei aus `wp-content/mu-plugins/` löschen. Alle Einschränkungen und Freischaltungen sind damit sofort aufgehoben. In der Datenbank bleiben zurück und können bei Bedarf gelöscht werden: der Benutzer-Meta-Schlüssel `cdmv_hidden` sowie die Optionen `cdmv_bar_nodes` und `cdmv_superuser_pin`.
+Ein Must-Use-Plugin hat keine Deinstallationsroutine: WordPress bemerkt nicht, wenn die Datei gelöscht wird. Die Daten müssen deshalb **vor** dem Löschen der Datei entfernt werden. Dafür gibt es zwei Wege.
+
+**Weg 1 – Link im Backend (als Superuser):**
+1. *Plugins → Must-Use* öffnen. Unter **CD.RestrictMenu** auf **Plugin-Daten entfernen** klicken und bestätigen.
+2. Datei `cd-RestrictMenu.php` aus `wp-content/mu-plugins/` löschen.
+
+Nach dem Klick legt das Plugin im verwendeten Browser 24 Stunden lang keine neuen Daten an, damit bis zum Löschen der Datei nichts nachwächst. Wer in dieser Zeit erneut „Menü einschränken“ öffnet, nutzt das Plugin wieder normal.
+
+**Weg 2 – Schalter in der `wp-config.php` (ohne Backend-Zugang):**
+1. In die `wp-config.php` eintragen:
+   ```php
+   define( 'CDMV_CLEANUP', true );
+   ```
+2. Eine beliebige Seite der Website aufrufen. Das Plugin entfernt dabei alle Daten und ruht, solange der Schalter gesetzt ist.
+3. Datei `cd-RestrictMenu.php` aus `wp-content/mu-plugins/` löschen, danach die Zeile wieder aus der `wp-config.php` entfernen.
+
+In beiden Fällen sind alle Einschränkungen und Freischaltungen sofort aufgehoben. Ist die Datei bereits gelöscht, siehe FAQ.
 
 ### Voraussetzungen
 WordPress, PHP ≥ 7.4. Der Superuser muss Administrator sein (Berechtigung `manage_options`).
@@ -62,6 +78,37 @@ WordPress, PHP ≥ 7.4. Der Superuser muss Administrator sein (Berechtigung `man
 - **Aussperren:** Der Superuser kann sich nicht selbst einschränken. Ist der eingetragene Benutzername falsch oder leer, gibt es keinen Superuser und der Link erscheint bei niemandem – bestehende Einschränkungen gelten dann weiter.
 - **Superuser-Konto neu angelegt oder gewechselt:** Das Plugin bindet den Superuser an Benutzername **und** Benutzer-ID. Wird das Konto gelöscht und mit demselben Namen neu angelegt, ist es nicht mehr Superuser. Dann `CDMV_SUPERUSER_ID` in der `wp-config.php` auf die neue ID setzen oder die Option `cdmv_superuser_pin` löschen. Ein Wechsel auf einen anderen Benutzernamen wird automatisch übernommen.
 - **Grenzen der Sperre:** Gesperrt werden normale Backend-Seiten. Über REST-Schnittstelle, `admin-ajax.php` und Oberflächen, die Inhalte ohne Neuladen nachladen, bleibt erreichbar, was die Rolle des Benutzers erlaubt. Das Plugin räumt die Bedienung auf; es ersetzt keine Rechtevergabe über Rollen. Wer Plugins installieren oder Dateien ändern darf, kann es aushebeln.
+
+## FAQ
+
+### Die Plugin-Datei ist schon gelöscht – wie entferne ich die Reste aus der Datenbank von Hand?
+Das Plugin legt genau drei Dinge ab:
+
+| Wo | Schlüssel | Inhalt |
+|---|---|---|
+| Tabelle `usermeta` | `cdmv_hidden` | Rechteprofil je Benutzer (ausgeblendete Einträge, Freischaltungen) |
+| Tabelle `options` | `cdmv_bar_nodes` | bekannte Einträge der Admin-Leiste |
+| Tabelle `options` | `cdmv_superuser_pin` | gemerkte Benutzer-ID des Superusers |
+
+**Per phpMyAdmin** (Tabellenpräfix `wp_` ggf. anpassen, vorher Datenbank sichern):
+```sql
+DELETE FROM wp_usermeta WHERE meta_key = 'cdmv_hidden';
+DELETE FROM wp_options WHERE option_name IN ('cdmv_bar_nodes', 'cdmv_superuser_pin');
+```
+
+**Per WP-CLI:**
+```bash
+wp option delete cdmv_bar_nodes cdmv_superuser_pin
+wp db query "DELETE FROM $(wp db prefix)usermeta WHERE meta_key = 'cdmv_hidden'"
+```
+
+Schaden richten die Reste nicht an: Ohne die Plugin-Datei liest sie niemand, Einschränkungen und Freischaltungen sind wirkungslos. In einer Multisite liegen die beiden Optionen je Website vor.
+
+### Ich habe „Plugin-Daten entfernen“ geklickt, will das Plugin aber doch weiter nutzen. Was nun?
+Einfach unter *Benutzer* wieder **Menü einschränken** öffnen. Das Plugin arbeitet dann normal weiter; die entfernten Profile sind allerdings weg und müssen neu angelegt werden.
+
+### Warum erscheint der Link „Plugin-Daten entfernen“ nicht?
+Er wird nur dem Superuser angezeigt, und nur im Reiter *Must-Use* der Plugin-Liste.
 
 ## Struktur
 ```

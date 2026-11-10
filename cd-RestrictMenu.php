@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CD.RestrictMenu
  * Description: Ermöglicht es einem festgelegten Superuser die Backend-Navigation anzupassen, sodass Sie die beste Benutzererfahrung in der Bedienung erhalten und nicht durch unnütze Inhalte gestört werden.
- * Version:     1.0.1
+ * Version:     1.0.3
  * Requires PHP: 7.4
  *
  * Installation: Diese Datei nach wp-content/mu-plugins/ kopieren.
@@ -48,18 +48,131 @@ final class CDMV_Menu_Visibility {
 	private static $cap_cache = array();
 	const BAR_OPTION = 'cdmv_bar_nodes';    // Bekannte Admin-Leisten-Einträge (vom Superuser gesehen).
 	const PIN_OPTION = 'cdmv_superuser_pin'; // Gemerkte Benutzer-ID des Superusers (login + id).
+	const PAUSE_COOKIE = 'cdmv_paused';     // Nach dem Entfernen der Daten: vorerst nichts Neues speichern.
 	const PAGE       = 'cdmv-menu-visibility';
 	const NONCE      = 'cdmv_save_';
 
 	/** Einträge der Admin-Leiste, die nie abschaltbar sind (mobiler Menü-Schalter). */
 	const BAR_PROTECTED = array( 'menu-toggle' );
 
+	/**
+	 * Berechtigungen, die Administrator-Rechten gleichkommen oder den Weg dorthin öffnen
+	 * (Einstellungen, Code ausführen, Benutzer verwalten). Sie werden beim Freischalten
+	 * markiert und vor dem Speichern eigens bestätigt.
+	 */
+	const CRITICAL_CAPS = array(
+		'manage_options',
+		'activate_plugins',
+		'install_plugins',
+		'update_plugins',
+		'delete_plugins',
+		'edit_plugins',
+		'install_themes',
+		'update_themes',
+		'delete_themes',
+		'edit_themes',
+		'switch_themes',
+		'update_core',
+		'edit_files',
+		'import',
+		'unfiltered_html',
+		'unfiltered_upload',
+		'edit_users',
+		'create_users',
+		'delete_users',
+		'promote_users',
+		'remove_users',
+		'manage_network',
+		'manage_sites',
+		'manage_network_users',
+		'manage_network_plugins',
+		'manage_network_themes',
+		'manage_network_options',
+	);
+
 	public static function init() {
+		// Schalter in der wp-config.php: define( 'CDMV_CLEANUP', true );
+		// Entfernt alle Plugin-Daten und lässt das Plugin ruhen, solange der Schalter gesetzt ist.
+		if ( defined( 'CDMV_CLEANUP' ) && CDMV_CLEANUP ) {
+			self::cleanup();
+			return;
+		}
+
+		add_filter( 'plugin_action_links', array( __CLASS__, 'plugin_links' ), 10, 4 );
+		add_action( 'admin_post_cdmv_cleanup', array( __CLASS__, 'handle_cleanup' ) );
+		add_action( 'admin_notices', array( __CLASS__, 'cleanup_notice' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_page' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'apply_menu' ), PHP_INT_MAX );
 		add_action( 'wp_before_admin_bar_render', array( __CLASS__, 'admin_bar' ), PHP_INT_MAX );
 		add_filter( 'user_row_actions', array( __CLASS__, 'row_action' ), 10, 2 );
 		add_filter( 'user_has_cap', array( __CLASS__, 'grant_caps' ), 10, 4 );
+	}
+
+	/* ------------------------------------------------------------------
+	 * Plugin-Daten entfernen (vor dem Löschen der Plugin-Datei)
+	 * ---------------------------------------------------------------- */
+
+	/** Löscht alles, was das Plugin in der Datenbank ablegt. */
+	private static function cleanup() {
+		delete_metadata( 'user', 0, self::META, '', true ); // Profile aller Benutzer.
+		delete_option( self::BAR_OPTION );
+		delete_option( self::PIN_OPTION );
+		self::$cap_cache = array();
+	}
+
+	/**
+	 * Nach „Plugin-Daten entfernen“ legt das Plugin in diesem Browser vorerst keine neuen
+	 * Daten an (sonst wären sie beim nächsten Seitenaufruf wieder da). Das Cookie unterdrückt
+	 * nur das Schreiben; an der Prüfung, wer Superuser ist, ändert es nichts.
+	 */
+	private static function is_paused() {
+		return ! empty( $_COOKIE[ self::PAUSE_COOKIE ] );
+	}
+
+	private static function set_pause( $on ) {
+		if ( headers_sent() ) {
+			return;
+		}
+		setcookie( self::PAUSE_COOKIE, $on ? '1' : '', $on ? time() + DAY_IN_SECONDS : time() - DAY_IN_SECONDS, COOKIEPATH ? COOKIEPATH : '/', COOKIE_DOMAIN, is_ssl(), true );
+		if ( $on ) {
+			$_COOKIE[ self::PAUSE_COOKIE ] = '1';
+		} else {
+			unset( $_COOKIE[ self::PAUSE_COOKIE ] );
+		}
+	}
+
+	/** Link „Plugin-Daten entfernen“ in der Liste der Must-Use-Plugins (nur Superuser). */
+	public static function plugin_links( $actions, $plugin_file, $plugin_data = null, $context = '' ) {
+		if ( 'mustuse' !== $context || basename( __FILE__ ) !== $plugin_file || ! self::is_superuser() ) {
+			return $actions;
+		}
+		$url     = wp_nonce_url( admin_url( 'admin-post.php?action=cdmv_cleanup' ), 'cdmv_cleanup' );
+		$confirm = 'Alle Daten von CD.RestrictMenu entfernen? Sämtliche Einschränkungen und Freischaltungen aller Benutzer werden sofort aufgehoben. Das lässt sich nicht rückgängig machen.';
+
+		$actions                 = (array) $actions;
+		$actions['cdmv_cleanup'] = '<a href="' . esc_url( $url ) . '" style="color:#b32d2e" onclick="return confirm(' . esc_attr( wp_json_encode( $confirm ) ) . ');">Plugin-Daten entfernen</a>';
+		return $actions;
+	}
+
+	public static function handle_cleanup() {
+		if ( ! self::is_superuser() ) {
+			wp_die( 'Du bist nicht berechtigt, diese Aktion auszuführen.', 'Kein Zugriff', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'cdmv_cleanup' );
+
+		self::cleanup();
+		self::set_pause( true );
+
+		wp_safe_redirect( admin_url( 'plugins.php?plugin_status=mustuse&cdmv_cleaned=1' ) );
+		exit;
+	}
+
+	public static function cleanup_notice() {
+		if ( ! isset( $_GET['cdmv_cleaned'] ) || ! self::is_superuser() ) {
+			return;
+		}
+		echo '<div class="notice notice-success"><p><strong>CD.RestrictMenu:</strong> Alle Plugin-Daten wurden entfernt. Sämtliche Einschränkungen und Freischaltungen sind aufgehoben.</p>'
+			. '<p>Lösche jetzt die Datei <code>' . esc_html( basename( __FILE__ ) ) . '</code> aus <code>wp-content/mu-plugins/</code>. In diesem Browser legt das Plugin 24 Stunden lang keine neuen Daten an – es sei denn, du öffnest erneut „Menü einschränken“.</p></div>';
 	}
 
 	/* ------------------------------------------------------------------
@@ -153,14 +266,16 @@ final class CDMV_Menu_Visibility {
 			} else {
 				$pin = get_option( self::PIN_OPTION );
 				if ( ! is_array( $pin ) || ! isset( $pin['login'], $pin['id'] ) || CDMV_SUPERUSER !== $pin['login'] ) {
-					update_option(
-						self::PIN_OPTION,
-						array(
-							'login' => CDMV_SUPERUSER,
-							'id'    => (int) $user->ID,
-						),
-						false
-					);
+					if ( ! self::is_paused() ) {
+						update_option(
+							self::PIN_OPTION,
+							array(
+								'login' => CDMV_SUPERUSER,
+								'id'    => (int) $user->ID,
+							),
+							false
+						);
+					}
 				} else {
 					$ok = (int) $pin['id'] === (int) $user->ID;
 				}
@@ -239,7 +354,7 @@ final class CDMV_Menu_Visibility {
 
 	public static function row_action( $actions, $user ) {
 		if ( self::is_superuser() && CDMV_SUPERUSER !== $user->user_login ) {
-			$actions['cdmv'] = '<a href="' . esc_url( self::page_url( $user->ID ) ) . '" style="color:' . self::LINK_COLOR . '">Menü-Sichtbarkeit</a>';
+			$actions['cdmv'] = '<a href="' . esc_url( self::page_url( $user->ID ) ) . '" style="color:' . self::LINK_COLOR . '">Menü einschränken</a>';
 		}
 		return $actions;
 	}
@@ -514,7 +629,7 @@ final class CDMV_Menu_Visibility {
 
 		// Superuser: gesehene Einträge merken (Backend und Frontend unterscheiden sich).
 		if ( self::is_superuser() ) {
-			$nodes = $wp_admin_bar->get_nodes();
+			$nodes = self::is_paused() ? null : $wp_admin_bar->get_nodes();
 			if ( ! $nodes ) {
 				return;
 			}
@@ -599,7 +714,7 @@ final class CDMV_Menu_Visibility {
 		if ( ! self::is_superuser() ) {
 			return;
 		}
-		$hook = add_users_page( 'Menü-Sichtbarkeit', 'Menü-Sichtbarkeit', 'read', self::PAGE, array( __CLASS__, 'render' ) );
+		$hook = add_users_page( 'CD.RestrictMenu', 'CD.RestrictMenu', 'read', self::PAGE, array( __CLASS__, 'render' ) );
 		if ( $hook ) {
 			add_action( 'load-' . $hook, array( __CLASS__, 'handle_save' ) );
 		}
@@ -671,6 +786,10 @@ final class CDMV_Menu_Visibility {
 	}
 
 	public static function handle_save() {
+		// Wer die Einstellungsseite öffnet, nutzt das Plugin weiter: Speicherpause beenden.
+		if ( self::is_paused() && self::is_superuser() ) {
+			self::set_pause( false );
+		}
 		if ( 'POST' !== $_SERVER['REQUEST_METHOD'] ) {
 			return;
 		}
@@ -796,13 +915,20 @@ final class CDMV_Menu_Visibility {
 	}
 
 	/** Hinweis + Freischalt-Haken für Einträge, die die Rolle allein nicht sehen darf. */
-	private static function grant_html( $key, $cap, $granted ) {
+	private static function grant_html( $key, $cap, $granted, $slug = '' ) {
 		if ( 'do_not_allow' === $cap ) {
 			return ' <em class="cdmv-norole cdmv-grantbox">für niemanden freigegeben, nicht freischaltbar</em>';
 		}
-		return' <label class="cdmv-grantbox"><em class="cdmv-norole">für diese Rolle nicht sichtbar –</em> '
-			. '<input type="checkbox" class="cdmv-grant" name="cdmv_grant[]" value="' . esc_attr( $key ) . '"' . checked( isset( $granted[ $key ] ), true, false ) . '> '
-			. '<span class="cdmv-norole">trotzdem freischalten</span> <code>' . esc_html( $cap ) . '</code></label>';
+		// Berechtigungen, die praktisch Administrator-Rechte bedeuten, deutlich kennzeichnen.
+		$critical = array_values( array_intersect( self::caps_for( $cap, $slug ), self::CRITICAL_CAPS ) );
+		$data     = $critical ? ' data-danger="' . esc_attr( implode( ', ', $critical ) ) . '"' : '';
+		$warn     = $critical
+			? ' <span class="cdmv-danger" title="Diese Berechtigung kommt Administrator-Rechten gleich oder ermöglicht es, sie sich zu verschaffen.">&#9888; weitreichend</span>'
+			: '';
+
+		return ' <label class="cdmv-grantbox"><em class="cdmv-norole">für diese Rolle nicht sichtbar –</em> '
+			. '<input type="checkbox" class="cdmv-grant" name="cdmv_grant[]" value="' . esc_attr( $key ) . '"' . $data . checked( isset( $granted[ $key ] ), true, false ) . '> '
+			. '<span class="cdmv-norole">trotzdem freischalten</span> <code>' . esc_html( $cap ) . '</code>' . $warn . '</label>';
 	}
 
 	private static function render_bar_level( $tree, $parent, $hidden, $depth = 0 ) {
@@ -852,7 +978,7 @@ final class CDMV_Menu_Visibility {
 		<div class="wrap cdmv">
 			<div class="cdmv-head">
 				<div>
-					<h1>Menü-Sichtbarkeit: <?php echo esc_html( $user->display_name ); ?></h1>
+					<h1>CD.RestrictMenu: <?php echo esc_html( $user->display_name ); ?></h1>
 					<p class="description">
 						Benutzername <strong><?php echo esc_html( $user->user_login ); ?></strong>
 						<?php if ( $roles ) : ?>
@@ -902,7 +1028,7 @@ final class CDMV_Menu_Visibility {
 			<p class="cdmv-noprint">Angehakte Einträge sind für diesen Benutzer sichtbar. Ohne Haken wird der Eintrag ausgeblendet und der direkte Aufruf der Seite gesperrt.</p>
 			<p class="cdmv-noprint">Einträge, die die Rolle des Benutzers nicht sehen darf, lassen sich über „trotzdem freischalten“ zusätzlich erlauben. Der Benutzer erhält dafür die dahinter genannte Berechtigung – sie gilt überall, wo WordPress oder ein Plugin sie abfragt, nicht nur für diesen einen Menüpunkt.</p>
 
-			<form method="post" action="<?php echo esc_url( self::page_url( $user->ID ) ); ?>">
+			<form method="post" class="cdmv-main-form" action="<?php echo esc_url( self::page_url( $user->ID ) ); ?>">
 				<?php wp_nonce_field( self::NONCE . $user->ID ); ?>
 
 				<div class="cdmv-cols">
@@ -932,14 +1058,14 @@ final class CDMV_Menu_Visibility {
 								echo '<li><label><input type="checkbox" name="cdmv_menu[]" value="' . esc_attr( $node['key'] ) . '"' . checked( ! $top_off, true, false ) . '>';
 								echo self::icon_html( $node['icon'], $node['dom_id'] ); // phpcs:ignore WordPress.Security.EscapeOutput
 								echo '<span class="cdmv-title">' . esc_html( $node['title'] ) . '</span></label>';
-								echo $can ? '' : self::grant_html( $node['key'], $node['cap'], $granted ); // phpcs:ignore WordPress.Security.EscapeOutput
+								echo $can ? '' : self::grant_html( $node['key'], $node['cap'], $granted, $node['slug'] ); // phpcs:ignore WordPress.Security.EscapeOutput
 								if ( $node['children'] ) {
 									echo '<ul>';
 									foreach ( $node['children'] as $child ) {
 										$on = ! $top_off && ! isset( $hidden[ $child['key'] ] );
 										echo '<li><label><input type="checkbox" name="cdmv_menu[]" value="' . esc_attr( $child['key'] ) . '"' . checked( $on, true, false ) . '> ';
 										echo '<span class="cdmv-title">' . esc_html( $child['title'] ) . '</span></label>';
-										echo self::role_can( $user, $child['cap'] ) ? '' : self::grant_html( $child['key'], $child['cap'], $granted ); // phpcs:ignore WordPress.Security.EscapeOutput
+										echo self::role_can( $user, $child['cap'] ) ? '' : self::grant_html( $child['key'], $child['cap'], $granted, $child['slug'] ); // phpcs:ignore WordPress.Security.EscapeOutput
 										echo '</li>';
 									}
 									echo '</ul>';
@@ -1009,6 +1135,7 @@ final class CDMV_Menu_Visibility {
 			.cdmv-ico img { max-width: 18px; max-height: 18px; vertical-align: middle; }
 			.cdmv-norole { color: #996800; font-size: 12px; }
 			.cdmv-grantbox { margin-left: 8px; white-space: nowrap; }
+			.cdmv-danger { color: #b32d2e; font-size: 12px; font-weight: 600; margin-left: 6px; cursor: help; }
 			.cdmv-grantbox input { margin: 0 2px 0 4px; }
 		</style>
 		<script>
@@ -1043,6 +1170,27 @@ final class CDMV_Menu_Visibility {
 			} );
 
 			wrap.querySelector( '.cdmv-print-btn' ).addEventListener( 'click', function () { window.print(); } );
+
+			// Neu angehakte weitreichende Freischaltungen vor dem Speichern bestätigen lassen.
+			var mainForm = wrap.querySelector( '.cdmv-main-form' );
+			if ( mainForm ) {
+				mainForm.addEventListener( 'submit', function ( e ) {
+					var caps = [];
+					mainForm.querySelectorAll( '.cdmv-grant[data-danger]' ).forEach( function ( c ) {
+						if ( c.checked && ! c.defaultChecked ) {
+							c.getAttribute( 'data-danger' ).split( ', ' ).forEach( function ( cap ) {
+								if ( caps.indexOf( cap ) < 0 ) { caps.push( cap ); }
+							} );
+						}
+					} );
+					if ( caps.length && ! window.confirm(
+						'Achtung: Du schaltest weitreichende Berechtigungen frei:\n\n' + caps.join( '\n' ) +
+						'\n\nSie kommen Administrator-Rechten gleich oder ermöglichen es, sich diese zu verschaffen. Wirklich speichern?'
+					) ) {
+						e.preventDefault();
+					}
+				} );
+			}
 
 			// Copy2User: Auswahl ein-/ausblenden, vor dem Übertragen nachfragen.
 			var copyBtn = wrap.querySelector( '.cdmv-copy-btn' );
